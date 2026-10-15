@@ -128,12 +128,16 @@ async function request(method, path, body) {
   // Content-Length; we delete it afterwards.
   let bodyFile = null;
   const argv = [HELPER, SOCK, method, path, token];
-  if (body != null) {
-    bodyFile = DIR + "/req-" + Math.random().toString(36).slice(2) + ".tmp";
-    await writeFileAtomic(bodyFile, String(body));
-    argv.push("--body-file", bodyFile);
-  }
   try {
+    if (body != null) {
+      bodyFile = DIR + "/req-" + Math.random().toString(36).slice(2) + ".tmp";
+      const staged = await writeFileAtomic(bodyFile, String(body));
+      if (!staged || staged.ok !== true) {
+        const reason = staged && staged.error ? String(staged.error).trim() : "unknown file-write error";
+        throw new Error("failed to stage request body: " + reason);
+      }
+      argv.push("--body-file", bodyFile);
+    }
     const r = await run(argv);
     if (r.errno === 1 || r.errno === -1) {
       console.error("[keyAdmin] ✗ %s %s transport error in %dms: %o", method, path, Date.now() - t0, r.stderr);
